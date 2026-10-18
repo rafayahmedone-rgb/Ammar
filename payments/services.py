@@ -15,6 +15,7 @@ from django.utils import timezone
 from auctions.models import Auction
 from core.models import PlatformConfig
 from core.services import log_action
+from notifications import services as notifications
 
 from .models import Payment
 
@@ -22,6 +23,8 @@ from .models import Payment
 GST_RATE = Decimal("0.10")
 # How long the buyer has to pay after the auction closes.
 PAYMENT_WINDOW = timedelta(hours=48)
+# Remind the buyer when this much time is left to pay.
+REMINDER_BEFORE_DUE = timedelta(hours=24)
 
 CENT = Decimal("0.01")
 
@@ -105,6 +108,7 @@ def pay(user, payment):
 
         log_action(user, "PAYMENT_PAID", target=payment,
                    details=f"${payment.total_amount}, ref {payment.reference}")
+        notifications.notify_payment_received(payment)
     return payment
 
 
@@ -135,6 +139,7 @@ def expire_payment(payment):
                    details="Not paid within 48 hours")
         log_action(None, "AUCTION_NOT_SOLD", target=auction,
                    details="Buyer did not pay")
+        notifications.notify_payment_expired(payment)
     return True
 
 
@@ -152,3 +157,27 @@ def expire_overdue_payments():
         if expire_payment(payment):
             expired += 1
     return expired
+
+
+def send_payment_reminders():
+    """
+    Remind buyers who have not paid and have 24 hours or less left.
+    Each payment gets at most one reminder. Returns how many were sent.
+    """
+    now = timezone.now()
+    due_soon = Payment.objects.filter(
+        status=Payment.Status.PENDING,
+        reminder_sent_at__isnull=True,
+        due_at__gt=now,
+        due_at__lte=now + REMINDER_BEFORE_DUE,
+    ).select_related("auction__lot", "buyer")
+
+    sent = 0
+    for payment in due_soon:
+        with transaction.atomic():
+            payment.reminder_sent_at = now
+            payment.save(update_fields=["reminder_sent_at"])
+            log_action(None, "PAYMENT_REMINDER_SENT", target=payment)
+            notifications.notify_payment_reminder(payment)
+        sent += 1
+    return sent

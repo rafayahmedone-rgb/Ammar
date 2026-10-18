@@ -81,6 +81,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "notifications.context_processors.unread_notifications",
             ],
         },
     },
@@ -186,6 +187,10 @@ EMAIL_BACKEND = os.getenv(
 DEFAULT_FROM_EMAIL = os.getenv(
     "DEFAULT_FROM_EMAIL", "no-reply@southerncrossauctions.local"
 )
+EMAIL_SUBJECT_PREFIX = "[Southern Cross Auctions] "
+
+# Used to build full links in emails, e.g. SITE_URL + "/auctions/lots/3/".
+SITE_URL = os.getenv("SITE_URL", "http://127.0.0.1:8000").rstrip("/")
 
 
 # ---------------------------------------------------------------------------
@@ -219,8 +224,10 @@ CELERY_RESULT_BACKEND = os.getenv(
     "CELERY_RESULT_BACKEND", "redis://localhost:6379/0"
 )
 CELERY_TIMEZONE = TIME_ZONE
-# During tests, run tasks immediately in the same process (no Redis needed).
-CELERY_TASK_ALWAYS_EAGER = TESTING
+# "Eager" mode runs tasks straight away in the same process, so no Redis
+# or worker is needed. Always on in tests; set CELERY_TASK_ALWAYS_EAGER=True
+# in .env to run the site without Redis.
+CELERY_TASK_ALWAYS_EAGER = TESTING or env_bool("CELERY_TASK_ALWAYS_EAGER")
 
 # Periodic tasks run by "celery -A config beat". Times are in seconds.
 CELERY_BEAT_SCHEDULE = {
@@ -230,6 +237,10 @@ CELERY_BEAT_SCHEDULE = {
     },
     "expire-overdue-payments": {
         "task": "payments.tasks.expire_overdue_payments_task",
+        "schedule": 600.0,
+    },
+    "send-payment-reminders": {
+        "task": "payments.tasks.send_payment_reminders_task",
         "schedule": 600.0,
     },
 }

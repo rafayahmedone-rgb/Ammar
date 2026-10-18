@@ -49,6 +49,8 @@ class Payment(models.Model):
     # The buyer must pay before this time (48 hours after the close).
     due_at = models.DateTimeField(db_index=True)
     paid_at = models.DateTimeField(null=True, blank=True)
+    # When the "please pay" reminder was sent (so it is only sent once).
+    reminder_sent_at = models.DateTimeField(null=True, blank=True)
     # The (mock) payment provider's transaction reference.
     reference = models.CharField(max_length=50, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

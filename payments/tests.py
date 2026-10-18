@@ -305,6 +305,7 @@ class TaskTests(SaleTestCase):
             {
                 "auctions.tasks.close_ended_auctions_task",
                 "payments.tasks.expire_overdue_payments_task",
+                "payments.tasks.send_payment_reminders_task",
             },
         )
 
@@ -314,8 +315,10 @@ class TaskTests(SaleTestCase):
 
         call_command("run_periodic_tasks", stdout=out)
 
-        self.assertIn("Closed 1 auction(s), expired 0 payment(s).",
-                      out.getvalue())
+        self.assertIn(
+            "Closed 1 auction(s), sent 0 reminder(s), expired 0 payment(s).",
+            out.getvalue(),
+        )
 
 
 class PaymentPageTests(SaleTestCase):

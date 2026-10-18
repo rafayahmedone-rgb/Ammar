@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block title %}Notifications | Southern Cross Auctions{% endblock %}
+
+{% block content %}
+<h1 class="h3 mb-3">Notifications</h1>
+
+<div class="list-group">
+    {% for notification in notifications %}
+        <div class="list-group-item">
+            <div class="d-flex justify-content-between">
+                <strong>
+                    {% if not notification.is_read %}<span class="badge bg-primary me-1">New</span>{% endif %}
+                    {{ notification.subject }}
+                </strong>
+                <small class="text-muted">{{ notification.created_at|date:"j M Y, g:i A" }}</small>
+            </div>
+            {# urlize turns the links in the message into clickable links. #}
+            <p class="mb-0 mt-1" style="white-space: pre-line;">{{ notification.message|urlize }}</p>
+        </div>
+    {% empty %}
+        <p>You have no notifications.</p>
+    {% endfor %}
+</div>
+{% endblock %}

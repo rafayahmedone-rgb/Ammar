@@ -54,6 +54,14 @@
                 <ul class="navbar-nav ms-auto align-items-lg-center">
                     {% if user.is_authenticated %}
                         <li class="nav-item">
+                            <a class="nav-link me-2" href="{% url 'notifications:notification_list' %}">
+                                Notifications
+                                {% if unread_notification_count %}
+                                    <span class="badge bg-danger">{{ unread_notification_count }}</span>
+                                {% endif %}
+                            </a>
+                        </li>
+                        <li class="nav-item">
                             <span class="navbar-text me-3">
                                 {{ user.username }} ({{ user.get_role_display }})
                             </span>

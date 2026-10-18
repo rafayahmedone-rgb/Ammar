@@ -14,6 +14,7 @@ from django.utils import timezone
 from accounts.models import User
 from core.models import PlatformConfig
 from core.services import log_action
+from notifications import services as notifications
 
 from .models import Auction, Bid, Lot, Watchlist
 
@@ -126,6 +127,7 @@ def approve_lot(moderator, lot):
             target=auction,
             details=f"Ends {auction.end_time:%Y-%m-%d %H:%M} UTC",
         )
+        notifications.notify_lot_approved(lot, auction)
     return auction
 
 
@@ -143,6 +145,7 @@ def reject_lot(moderator, lot, reason):
         lot.save()
 
         log_action(moderator, "LOT_REJECTED", target=lot, details=reason)
+        notifications.notify_lot_rejected(lot)
     return lot
 
 
@@ -197,7 +200,11 @@ def place_bid(bidder, auction, amount):
         if amount < minimum:
             raise BidError(f"Your bid must be at least ${minimum}.")
 
+        # Remember who was winning, so they can be told they were outbid.
+        previous_bid = auction.highest_bid()
         bid = Bid.objects.create(auction=auction, bidder=bidder, amount=amount)
+        if previous_bid and previous_bid.bidder_id != bidder.pk:
+            notifications.notify_outbid(previous_bid, bid)
         log_action(bidder, "BID_PLACED", target=bid,
                    details=f"${amount} on auction {auction.pk}")
 
@@ -314,7 +321,8 @@ def close_auction(auction):
         if reserve_met:
             auction.status = Auction.Status.SOLD
             auction.save(update_fields=["status"])
-            create_payment(auction, winning_bid)
+            payment = create_payment(auction, winning_bid)
+            notifications.notify_auction_sold(payment)
             details = (f"Sold to {winning_bid.bidder.username} "
                        f"for ${winning_bid.amount}")
         else:
@@ -325,6 +333,7 @@ def close_auction(auction):
             else:
                 details = (f"Reserve not met (highest bid "
                            f"${winning_bid.amount})")
+            notifications.notify_auction_not_sold(auction, details)
 
         log_action(None, "AUCTION_CLOSED", target=auction, details=details)
     return True
