@@ -11,6 +11,7 @@ urlpatterns = [
     # Bidding and watchlist
     path("<int:pk>/bid/", views.bid_place, name="bid_place"),
     path("<int:pk>/watch/", views.watch_toggle, name="watch_toggle"),
+    path("<int:pk>/cancel/", views.auction_cancel, name="auction_cancel"),
     path("watchlist/", views.watchlist, name="watchlist"),
     path("my-bids/", views.my_bids, name="my_bids"),
     path("bids/<int:pk>/withdraw/", views.bid_withdraw, name="bid_withdraw"),

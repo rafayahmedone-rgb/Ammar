@@ -87,6 +87,26 @@ def notify_outbid(previous_bid, new_bid):
     )
 
 
+def notify_auction_cancelled(auction, bidders):
+    lot = auction.lot
+    message = (
+        f'The auction for "{lot.title}" has been cancelled.\n'
+        f"Reason: {auction.cancellation_reason}\n\n"
+        f"Your bids on it no longer count."
+    )
+    for bidder in bidders:
+        notify(bidder, f'Auction cancelled: "{lot.title}"', message)
+
+    # Tell the seller too, unless they cancelled it themselves.
+    if auction.cancelled_by_id != lot.seller_id:
+        notify(
+            lot.seller,
+            f'Your auction for "{lot.title}" was cancelled',
+            f'An Admin cancelled the auction for "{lot.title}".\n'
+            f"Reason: {auction.cancellation_reason}",
+        )
+
+
 # ---------------------------------------------------------------------------
 # Auction results
 # ---------------------------------------------------------------------------
@@ -172,3 +192,40 @@ def notify_payment_expired(payment):
         f'The buyer did not pay for "{lot.title}" within 48 hours, so the '
         f"sale has been cancelled and the lot is marked as not sold.",
     )
+
+
+# ---------------------------------------------------------------------------
+# Disputes
+# ---------------------------------------------------------------------------
+
+
+def notify_dispute_raised(dispute):
+    """Tell the other party in the sale that a dispute was opened."""
+    payment = dispute.payment
+    lot = payment.auction.lot
+    if dispute.raised_by_id == payment.buyer_id:
+        other_party = lot.seller
+    else:
+        other_party = payment.buyer
+    notify(
+        other_party,
+        f'A dispute was raised about "{lot.title}"',
+        f"{dispute.raised_by.username} raised a dispute: "
+        f"{dispute.get_reason_display()}.\n"
+        f"An Admin will review it.\n\n"
+        f"{site_link('core:dispute_detail', dispute.pk)}",
+    )
+
+
+def notify_dispute_resolved(dispute):
+    """Tell both the buyer and the seller how the dispute was resolved."""
+    payment = dispute.payment
+    lot = payment.auction.lot
+    for user in (payment.buyer, lot.seller):
+        notify(
+            user,
+            f'Dispute resolved: "{lot.title}"',
+            f"The dispute about \"{lot.title}\" has been resolved.\n"
+            f"Resolution: {dispute.resolution}\n\n"
+            f"{site_link('core:dispute_detail', dispute.pk)}",
+        )

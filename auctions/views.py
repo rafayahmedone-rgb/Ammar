@@ -12,6 +12,7 @@ from accounts.permissions import role_required
 from . import services
 from .forms import (
     BidForm,
+    CancelAuctionForm,
     LotForm,
     ModeratorLotForm,
     RejectLotForm,
@@ -115,6 +116,8 @@ def auction_context(user, auction):
         "bid_form": BidForm(),
         "is_moderator": is_moderator,
         "withdraw_form": WithdrawBidForm(),
+        "can_cancel": services.can_cancel(user, auction),
+        "cancel_form": CancelAuctionForm(),
         "is_watching": (
             user.is_authenticated
             and Watchlist.objects.filter(user=user, auction=auction).exists()
@@ -167,6 +170,31 @@ def bid_withdraw(request, pk):
             messages.success(request, "The bid was withdrawn.")
 
     return redirect("auctions:lot_detail", pk=bid.auction.lot_id)
+
+
+@require_POST
+@login_required
+def auction_cancel(request, pk):
+    """
+    Cancel an auction. The service decides who may: the seller while
+    there are no bids, or an Admin at any time.
+    """
+    auction = get_object_or_404(Auction, pk=pk)
+    form = CancelAuctionForm(request.POST)
+
+    if not form.is_valid():
+        messages.error(request, "A reason is required to cancel.")
+    else:
+        try:
+            services.cancel_auction(
+                request.user, auction, form.cleaned_data["reason"]
+            )
+        except services.CancelError as error:
+            messages.error(request, str(error))
+        else:
+            messages.success(request, "The auction was cancelled.")
+
+    return redirect("auctions:lot_detail", pk=auction.lot_id)
 
 
 @require_POST

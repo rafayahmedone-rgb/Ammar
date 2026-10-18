@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block title %}Dispute {{ dispute.pk }} | Southern Cross Auctions{% endblock %}
+
+{% block content %}
+{% with payment=dispute.payment lot=dispute.payment.auction.lot %}
+<a href="{% url 'core:dispute_list' %}">&larr; All disputes</a>
+
+<h1 class="h3 mt-2">Dispute about "{{ lot.title }}"</h1>
+<p class="text-muted">
+    Raised by {{ dispute.raised_by.username }} on {{ dispute.created_at|date:"j M Y, g:i A" }}
+    &middot; Buyer: {{ payment.buyer.username }} &middot; Seller: {{ lot.seller.username }}
+    &middot; Sale: ${{ payment.total_amount }} ({{ payment.get_status_display }})
+</p>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <h2 class="h6">{{ dispute.get_reason_display }}</h2>
+        <p class="mb-0" style="white-space: pre-line;">{{ dispute.description }}</p>
+    </div>
+</div>
+
+{% if dispute.status == "RESOLVED" %}
+    <div class="alert alert-success">
+        <strong>Resolved</strong> by {{ dispute.resolved_by.username }}
+        on {{ dispute.resolved_at|date:"j M Y, g:i A" }}:<br>
+        <span style="white-space: pre-line;">{{ dispute.resolution }}</span>
+    </div>
+{% elif is_admin %}
+    <div class="card">
+        <div class="card-body">
+            <h2 class="h6">Resolve this dispute</h2>
+            <form method="post" action="{% url 'core:dispute_resolve' dispute.pk %}" novalidate>
+                {% csrf_token %}
+                {% include "includes/form_fields.html" with form=resolve_form %}
+                <button type="submit" class="btn btn-success">Mark as resolved</button>
+            </form>
+        </div>
+    </div>
+{% else %}
+    <div class="alert alert-warning">Waiting for an Admin to review.</div>
+{% endif %}
+{% endwith %}
+{% endblock %}

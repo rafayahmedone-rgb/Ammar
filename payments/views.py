@@ -42,6 +42,7 @@ def payment_detail(request, pk):
     context = {
         "payment": payment,
         "is_buyer": is_buyer,
+        "is_seller": is_seller,
         "show_seller_view": is_seller or is_admin,
         "gst_percent": int(services.GST_RATE * 100),
     }

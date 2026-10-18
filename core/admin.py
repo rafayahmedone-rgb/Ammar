@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import AuditLog, PlatformConfig
+from .models import AuditLog, Dispute, PlatformConfig
 from .services import log_action
 
 
@@ -51,3 +51,20 @@ class PlatformConfigAdmin(admin.ModelAdmin):
             target=obj,
             details=changes,
         )
+
+
+@admin.register(Dispute)
+class DisputeAdmin(admin.ModelAdmin):
+    """View-only: disputes are raised and resolved on the website."""
+
+    list_display = ("created_at", "payment", "raised_by", "reason", "status")
+    list_filter = ("status", "reason")
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

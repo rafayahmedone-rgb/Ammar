@@ -91,3 +91,10 @@ class WithdrawBidForm(BootstrapFormMixin, forms.Form):
         max_length=500,
         help_text="Recorded in the audit log.",
     )
+
+
+class CancelAuctionForm(BootstrapFormMixin, forms.Form):
+    reason = forms.CharField(
+        max_length=500,
+        help_text="Recorded in the audit log and sent to bidders.",
+    )

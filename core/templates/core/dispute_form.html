@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+
+{% block title %}Raise a dispute | Southern Cross Auctions{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <h1 class="h3 mb-3">Raise a dispute: "{{ payment.auction.lot.title }}"</h1>
+        <form method="post" novalidate>
+            {% csrf_token %}
+            {% include "includes/form_fields.html" %}
+            <button type="submit" class="btn btn-danger">Send to Admin</button>
+            <a href="{% url 'payments:payment_detail' payment.pk %}" class="btn btn-link">Cancel</a>
+        </form>
+    </div>
+</div>
+{% endblock %}

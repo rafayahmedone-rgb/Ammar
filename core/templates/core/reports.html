@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+
+{% block title %}Reports | Southern Cross Auctions{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-end mb-3 gap-2">
+    <h1 class="h3 mb-0">Reports</h1>
+    <form method="get" class="d-flex flex-wrap gap-2 align-items-end">
+        <div>
+            <label class="form-label small mb-0" for="{{ form.start.id_for_label }}">From</label>
+            {{ form.start }}
+        </div>
+        <div>
+            <label class="form-label small mb-0" for="{{ form.end.id_for_label }}">To</label>
+            {{ form.end }}
+        </div>
+        <button type="submit" class="btn btn-primary">Show</button>
+        <a href="{% url 'core:report_payments_csv' %}?{{ query_string }}" class="btn btn-outline-secondary">Download CSV</a>
+    </form>
+</div>
+{% for error in form.non_field_errors %}
+    <div class="alert alert-danger">{{ error }} Showing the last 30 days instead.</div>
+{% endfor %}
+
+<h2 class="h5">Money received</h2>
+<div class="row row-cols-2 row-cols-md-5 g-2 mb-4">
+    <div class="col"><div class="card"><div class="card-body">
+        <div class="small text-muted">Payments received</div>
+        <div class="fs-4">{{ sales.payments_received }}</div>
+    </div></div></div>
+    <div class="col"><div class="card"><div class="card-body">
+        <div class="small text-muted">Hammer total</div>
+        <div class="fs-4">${{ sales.hammer_total|floatformat:2 }}</div>
+    </div></div></div>
+    <div class="col"><div class="card"><div class="card-body">
+        <div class="small text-muted">GST collected</div>
+        <div class="fs-4">${{ sales.gst_total|floatformat:2 }}</div>
+    </div></div></div>
+    <div class="col"><div class="card"><div class="card-body">
+        <div class="small text-muted">Commission earned</div>
+        <div class="fs-4">${{ sales.commission_total|floatformat:2 }}</div>
+    </div></div></div>
+    <div class="col"><div class="card"><div class="card-body">
+        <div class="small text-muted">Owed to sellers</div>
+        <div class="fs-4">${{ sales.payout_total|floatformat:2 }}</div>
+    </div></div></div>
+</div>
+
+<div class="row g-4">
+    <div class="col-md-6">
+        <h2 class="h5">Sales and auctions</h2>
+        <table class="table table-sm">
+            <tr><td>Sales closed in period</td><td class="text-end">{{ sales.sales_closed }}</td></tr>
+            <tr><td>&hellip; still awaiting payment</td><td class="text-end">{{ sales.awaiting_payment }}</td></tr>
+            <tr><td>&hellip; expired (not paid in 48 hours)</td><td class="text-end">{{ sales.expired }}</td></tr>
+            <tr><td>Auctions ended: sold</td><td class="text-end">{{ auctions.sold }}</td></tr>
+            <tr><td>Auctions ended: not sold</td><td class="text-end">{{ auctions.not_sold }}</td></tr>
+            <tr><td>Auctions cancelled</td><td class="text-end">{{ auctions.cancelled }}</td></tr>
+            <tr><td>Auctions live right now</td><td class="text-end">{{ auctions.active_now }}</td></tr>
+        </table>
+    </div>
+    <div class="col-md-6">
+        <h2 class="h5">Activity</h2>
+        <table class="table table-sm">
+            <tr><td>New users</td><td class="text-end">{{ activity.new_users }}</td></tr>
+            <tr><td>Lots submitted</td><td class="text-end">{{ activity.lots_submitted }}</td></tr>
+            <tr><td>Bids placed</td><td class="text-end">{{ activity.bids_placed }}</td></tr>
+            <tr><td>Disputes raised</td><td class="text-end">{{ activity.disputes_raised }}</td></tr>
+            <tr><td>Lots waiting for review now</td><td class="text-end">{{ activity.lots_pending_now }}</td></tr>
+            <tr><td>Disputes open now</td><td class="text-end">{{ activity.disputes_open_now }}</td></tr>
+        </table>
+    </div>
+</div>
+
+<h2 class="h5 mt-2">Money received by category</h2>
+<div class="table-responsive">
+    <table class="table table-sm">
+        <thead>
+            <tr><th>Category</th><th class="text-end">Sales</th><th class="text-end">Hammer total</th><th class="text-end">Commission</th></tr>
+        </thead>
+        <tbody>
+            {% for row in categories %}
+                <tr>
+                    <td>{{ row.auction__lot__category__name }}</td>
+                    <td class="text-end">{{ row.sales }}</td>
+                    <td class="text-end">${{ row.hammer|floatformat:2 }}</td>
+                    <td class="text-end">${{ row.commission|floatformat:2 }}</td>
+                </tr>
+            {% empty %}
+                <tr><td colspan="4">No payments received in this period.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

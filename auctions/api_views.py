@@ -23,6 +23,7 @@ from accounts.permissions import CanBid, IsModerator, IsSeller
 from . import services
 from .forms import (
     BidForm,
+    CancelAuctionForm,
     LotForm,
     ModeratorLotForm,
     RejectLotForm,
@@ -160,6 +161,30 @@ class WithdrawBidView(APIView):
         except services.BidError as exc:
             return error(str(exc))
         return Response(BidSerializer(bid).data)
+
+
+class CancelAuctionView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        request=ReasonInputSerializer, responses={200: AuctionSerializer}
+    )
+    def post(self, request, pk):
+        """
+        Cancel an auction: the seller while it has no bids, or an Admin
+        at any time. A reason is required.
+        """
+        auction = get_object_or_404(Auction, pk=pk)
+        form = CancelAuctionForm(request.data)
+        if not form.is_valid():
+            return Response(form.errors, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            auction = services.cancel_auction(
+                request.user, auction, form.cleaned_data["reason"]
+            )
+        except services.CancelError as exc:
+            return error(str(exc))
+        return Response(AuctionSerializer(auction).data)
 
 
 class WatchToggleView(APIView):

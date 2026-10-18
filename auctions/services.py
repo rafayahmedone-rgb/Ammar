@@ -35,6 +35,10 @@ class BidError(Exception):
     """Raised when a bid breaks one of the bidding rules."""
 
 
+class CancelError(Exception):
+    """Raised when an auction cannot be cancelled."""
+
+
 def create_lot(seller, form):
     """Save a new lot from a valid LotForm. It always starts as PENDING."""
     with transaction.atomic():
@@ -353,3 +357,55 @@ def close_ended_auctions():
         if close_auction(auction):
             closed += 1
     return closed
+
+
+# ---------------------------------------------------------------------------
+# Cancelling auctions
+# ---------------------------------------------------------------------------
+
+
+def can_cancel(user, auction):
+    """
+    True if this user may cancel this auction right now:
+    - an Admin may cancel any ACTIVE auction;
+    - the seller may cancel their own ACTIVE auction only while it has no
+      bids (withdrawn bids do not count).
+    """
+    if not user.is_authenticated or auction.status != Auction.Status.ACTIVE:
+        return False
+    if user.role == User.Role.ADMIN:
+        return True
+    has_bids = auction.bids.filter(is_withdrawn=False).exists()
+    return auction.lot.seller_id == user.pk and not has_bids
+
+
+def cancel_auction(user, auction, reason):
+    """Cancel an auction. Bidders (and the seller) are notified."""
+    with transaction.atomic():
+        # Lock the row so no bid can be placed while we check and cancel.
+        auction = (
+            Auction.objects.select_for_update()
+            .select_related("lot")
+            .get(pk=auction.pk)
+        )
+        if not can_cancel(user, auction):
+            if auction.status != Auction.Status.ACTIVE:
+                raise CancelError("Only active auctions can be cancelled.")
+            if auction.lot.seller_id == user.pk:
+                raise CancelError("This auction has bids, so only an "
+                                  "Admin can cancel it.")
+            raise CancelError("You cannot cancel this auction.")
+
+        auction.status = Auction.Status.CANCELLED
+        auction.cancelled_by = user
+        auction.cancelled_at = timezone.now()
+        auction.cancellation_reason = reason
+        auction.save()
+
+        log_action(user, "AUCTION_CANCELLED", target=auction, details=reason)
+
+        # Everyone who bid (once each), plus the seller if an Admin
+        # cancelled it.
+        bidders = User.objects.filter(bids__auction=auction).distinct()
+        notifications.notify_auction_cancelled(auction, bidders)
+    return auction

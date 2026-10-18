@@ -81,3 +81,55 @@ class PlatformConfig(models.Model):
         """Return the single config row, creating it with defaults."""
         config, _created = cls.objects.get_or_create(pk=1)
         return config
+
+
+class Dispute(models.Model):
+    """
+    A problem with a sale, raised by its buyer or seller and resolved by
+    an Admin.
+    """
+
+    class Reason(models.TextChoices):
+        NOT_RECEIVED = "NOT_RECEIVED", "Item not received"
+        NOT_AS_DESCRIBED = "NOT_AS_DESCRIBED", "Item not as described"
+        NON_PAYMENT = "NON_PAYMENT", "Buyer has not paid"
+        OTHER = "OTHER", "Other"
+
+    class Status(models.TextChoices):
+        OPEN = "OPEN", "Open"
+        RESOLVED = "RESOLVED", "Resolved"
+
+    # A string reference ("app.Model") avoids importing the payments app.
+    payment = models.ForeignKey(
+        "payments.Payment",
+        on_delete=models.PROTECT,
+        related_name="disputes",
+    )
+    raised_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="disputes_raised",
+    )
+    reason = models.CharField(max_length=20, choices=Reason.choices)
+    description = models.TextField()
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.OPEN,
+    )
+    resolution = models.TextField(blank=True)
+    resolved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="disputes_resolved",
+    )
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Dispute {self.pk}: {self.get_reason_display()}"

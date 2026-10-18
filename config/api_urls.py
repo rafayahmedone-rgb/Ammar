@@ -32,6 +32,8 @@ urlpatterns = [
          name="place_bid"),
     path("auctions/<int:pk>/watch/", auctions.WatchToggleView.as_view(),
          name="watch_toggle"),
+    path("auctions/<int:pk>/cancel/", auctions.CancelAuctionView.as_view(),
+         name="cancel_auction"),
     path("watchlist/", auctions.WatchlistView.as_view(), name="watchlist"),
     # Sellers
     path("lots/", auctions.SellerLotListView.as_view(), name="lots"),

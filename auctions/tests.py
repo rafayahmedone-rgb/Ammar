@@ -7,6 +7,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core.models import AuditLog, PlatformConfig
+from notifications.models import Notification
 
 from . import services
 from .forms import LotForm, ModeratorLotForm
@@ -689,3 +690,91 @@ class WatchlistTests(BiddingTestCase):
         response = self.client.get(reverse("auctions:watchlist"))
 
         self.assertEqual(response.status_code, 302)
+
+
+class CancelAuctionTests(BiddingTestCase):
+    def cancel_url(self):
+        return reverse("auctions:auction_cancel", args=[self.auction.pk])
+
+    def test_seller_cancels_auction_without_bids(self):
+        self.client.force_login(self.seller)
+
+        self.client.post(self.cancel_url(), {"reason": "Item damaged"})
+
+        self.auction.refresh_from_db()
+        self.assertEqual(self.auction.status, Auction.Status.CANCELLED)
+        self.assertEqual(self.auction.cancelled_by, self.seller)
+        self.assertEqual(self.auction.cancellation_reason, "Item damaged")
+        log = AuditLog.objects.get(action="AUCTION_CANCELLED")
+        self.assertEqual(log.user, self.seller)
+
+    def test_seller_cannot_cancel_once_it_has_bids(self):
+        self.bid(self.bidder, "100.00")
+
+        with self.assertRaises(services.CancelError):
+            services.cancel_auction(self.seller, self.auction, "Changed mind")
+        self.auction.refresh_from_db()
+        self.assertEqual(self.auction.status, Auction.Status.ACTIVE)
+
+    def test_withdrawn_bids_do_not_block_the_seller(self):
+        bid = self.bid(self.bidder, "100.00")
+        services.withdraw_bid(self.moderator, bid, "Shill bid")
+
+        services.cancel_auction(self.seller, self.auction, "Relisting")
+
+        self.auction.refresh_from_db()
+        self.assertEqual(self.auction.status, Auction.Status.CANCELLED)
+
+    def test_admin_can_cancel_auction_with_bids(self):
+        self.bid(self.bidder, "100.00")
+        self.bid(self.bidder2, "105.00")
+
+        services.cancel_auction(self.admin, self.auction, "Stolen goods")
+
+        self.auction.refresh_from_db()
+        self.assertEqual(self.auction.status, Auction.Status.CANCELLED)
+        # Both bidders and the seller are told.
+        told = set(
+            Notification.objects.filter(
+                subject__icontains="cancelled"
+            ).values_list("user__username", flat=True)
+        )
+        self.assertEqual(told, {"bob", "bea", "sam"})
+
+    def test_other_users_cannot_cancel(self):
+        for user in (self.bidder, self.moderator, self.other_seller):
+            with self.assertRaises(services.CancelError):
+                services.cancel_auction(user, self.auction, "No")
+
+    def test_cannot_cancel_closed_auction(self):
+        self.auction.status = Auction.Status.NOT_SOLD
+        self.auction.save()
+
+        with self.assertRaises(services.CancelError):
+            services.cancel_auction(self.admin, self.auction, "Too late")
+
+    def test_reason_is_required(self):
+        self.client.force_login(self.seller)
+
+        self.client.post(self.cancel_url(), {"reason": ""})
+
+        self.auction.refresh_from_db()
+        self.assertEqual(self.auction.status, Auction.Status.ACTIVE)
+
+    def test_cancelled_auction_takes_no_bids(self):
+        services.cancel_auction(self.seller, self.auction, "Withdrawn")
+
+        with self.assertRaises(services.BidError):
+            self.bid(self.bidder, "100.00")
+
+    def test_cancel_form_only_shown_when_allowed(self):
+        detail = reverse("auctions:lot_detail", args=[self.lot.pk])
+
+        self.client.force_login(self.seller)
+        self.assertContains(self.client.get(detail), "Cancel auction")
+
+        self.bid(self.bidder, "100.00")
+        self.assertNotContains(self.client.get(detail), "Cancel auction")
+
+        self.client.force_login(self.admin)
+        self.assertContains(self.client.get(detail), "Cancel auction")

@@ -57,6 +57,14 @@
     {% endif %}
 </div>
 
-<a href="{% url 'auctions:lot_detail' lot.pk %}" class="btn btn-link mt-3 px-0">View lot</a>
+<div class="mt-3">
+    <a href="{% url 'auctions:lot_detail' lot.pk %}" class="btn btn-link px-0 me-3">View lot</a>
+    {% if is_buyer or is_seller %}
+        <a href="{% url 'core:dispute_create' payment.pk %}" class="btn btn-outline-danger btn-sm">Raise a dispute</a>
+    {% endif %}
+    {% if payment.disputes.exists %}
+        <a href="{% url 'core:dispute_list' %}" class="btn btn-link">View disputes</a>
+    {% endif %}
+</div>
 {% endwith %}
 {% endblock %}

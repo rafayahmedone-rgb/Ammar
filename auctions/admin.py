@@ -58,7 +58,8 @@ class LotAdmin(ViewOnlyAdmin):
 
 @admin.register(Auction)
 class AuctionAdmin(ViewOnlyAdmin):
-    list_display = ("lot", "status", "start_time", "end_time")
+    list_display = ("lot", "status", "start_time", "end_time",
+                    "extension_count")
     list_filter = ("status",)
 
 

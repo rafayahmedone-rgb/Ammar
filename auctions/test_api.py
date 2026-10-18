@@ -244,6 +244,23 @@ class BiddingApiTests(ApiTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.data["is_withdrawn"])
 
+    def test_cancel_through_api(self):
+        url = reverse("api:cancel_auction", args=[self.auction.pk])
+        services.place_bid(self.bidder, self.auction, Decimal("100"))
+
+        self.login(self.seller)
+        response = self.client.post(url, {"reason": "Oops"}, format="json")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("only an Admin", response.data["detail"])
+
+        admin = User.objects.create_user(
+            username="ada", password="x", role=User.Role.ADMIN
+        )
+        self.login(admin)
+        response = self.client.post(url, {"reason": "Fraud"}, format="json")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["status"], "CANCELLED")
+
     def test_watch_toggle_and_watchlist(self):
         self.login(self.bidder)
         url = reverse("api:watch_toggle", args=[self.auction.pk])

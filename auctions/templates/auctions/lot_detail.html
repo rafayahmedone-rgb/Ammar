@@ -97,6 +97,11 @@
                                 {% if user == payment.buyer and payment.status == "PENDING" %}Pay now{% else %}View sale{% endif %}
                             </a>
                         {% endif %}
+                    {% elif auction.status == "CANCELLED" %}
+                        <p class="mb-0">Auction cancelled.</p>
+                        {% if auction.cancellation_reason %}
+                            <p class="small text-muted mb-0">Reason: {{ auction.cancellation_reason }}</p>
+                        {% endif %}
                     {% else %}
                         <p class="mb-0">Auction {{ auction.get_status_display|lower }}.</p>
                     {% endif %}
@@ -113,6 +118,19 @@
                     {% if is_watching %}Remove from watchlist{% else %}Add to watchlist{% endif %}
                 </button>
             </form>
+        {% endif %}
+
+        {% if can_cancel %}
+            <div class="card mt-3 border-danger">
+                <div class="card-body">
+                    <h2 class="h6">Cancel this auction</h2>
+                    <form method="post" action="{% url 'auctions:auction_cancel' auction.pk %}" novalidate>
+                        {% csrf_token %}
+                        {% include "includes/form_fields.html" with form=cancel_form %}
+                        <button type="submit" class="btn btn-outline-danger btn-sm">Cancel auction</button>
+                    </form>
+                </div>
+            </div>
         {% endif %}
 
         {% if user == lot.seller and lot.seller_can_edit %}
