@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django import forms
 
 from core.forms import BootstrapFormMixin
@@ -64,4 +66,28 @@ class RejectLotForm(BootstrapFormMixin, forms.Form):
     reason = forms.CharField(
         widget=forms.Textarea(attrs={"rows": 3}),
         help_text="The seller will see this reason.",
+    )
+
+
+class BidForm(BootstrapFormMixin, forms.Form):
+    """
+    The amount box on the lot page.
+
+    It only checks that the amount is a positive number with cents. The
+    real rules (minimum bid etc.) are checked in services.place_bid,
+    while the auction row is locked.
+    """
+
+    amount = forms.DecimalField(
+        label="Your bid (AUD)",
+        max_digits=10,
+        decimal_places=2,
+        min_value=Decimal("0.01"),
+    )
+
+
+class WithdrawBidForm(BootstrapFormMixin, forms.Form):
+    reason = forms.CharField(
+        max_length=500,
+        help_text="Recorded in the audit log.",
     )

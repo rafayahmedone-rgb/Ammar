@@ -28,7 +28,11 @@
                 <div class="card-body">
                     <h2 class="h5 card-title">{{ auction.lot.title }}</h2>
                     <p class="text-muted small mb-2">{{ auction.lot.category.name }}</p>
-                    <p class="mb-1">Starting price: <strong>${{ auction.lot.starting_price }}</strong></p>
+                    {% if auction.current_price %}
+                        <p class="mb-1">Current bid: <strong>${{ auction.current_price|floatformat:2 }}</strong></p>
+                    {% else %}
+                        <p class="mb-1">Starting price: <strong>${{ auction.lot.starting_price }}</strong></p>
+                    {% endif %}
                     <p class="small mb-0">Ends {{ auction.end_time|date:"j M Y, g:i A" }}</p>
                 </div>
                 <div class="card-footer bg-transparent">

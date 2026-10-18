@@ -124,6 +124,8 @@ class Auction(models.Model):
     )
     start_time = models.DateTimeField()
     end_time = models.DateTimeField(db_index=True)
+    # How many times anti-sniping has pushed end_time back.
+    extension_count = models.PositiveSmallIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -131,3 +133,83 @@ class Auction(models.Model):
 
     def __str__(self):
         return f"Auction for {self.lot.title}"
+
+    def highest_bid(self):
+        """
+        Return the current winning Bid, or None if there are no bids.
+
+        Withdrawn bids are ignored. If two bids have the same amount, the
+        earlier one wins.
+        """
+        return (
+            self.bids.filter(is_withdrawn=False)
+            .order_by("-amount", "created_at")
+            .first()
+        )
+
+
+class Bid(models.Model):
+    """
+    One bid on an auction.
+
+    Bids are never deleted. A Moderator can withdraw one, which only marks
+    it as withdrawn so the history stays complete.
+    """
+
+    auction = models.ForeignKey(
+        Auction,
+        on_delete=models.PROTECT,
+        related_name="bids",
+    )
+    bidder = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="bids",
+    )
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    is_withdrawn = models.BooleanField(default=False)
+    withdrawn_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="withdrawn_bids",
+    )
+    withdrawn_at = models.DateTimeField(null=True, blank=True)
+    withdrawal_reason = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-amount", "created_at"]
+
+    def __str__(self):
+        return f"${self.amount} by {self.bidder.username}"
+
+
+class Watchlist(models.Model):
+    """An auction a user wants to keep an eye on."""
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="watchlist",
+    )
+    auction = models.ForeignKey(
+        Auction,
+        on_delete=models.CASCADE,
+        related_name="watchers",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        # A user can only watch the same auction once.
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "auction"], name="unique_watch"
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} watches {self.auction.lot.title}"

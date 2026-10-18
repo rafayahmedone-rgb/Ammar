@@ -8,6 +8,12 @@ urlpatterns = [
     # Public
     path("", views.auction_list, name="auction_list"),
     path("lots/<int:pk>/", views.lot_detail, name="lot_detail"),
+    # Bidding and watchlist
+    path("<int:pk>/bid/", views.bid_place, name="bid_place"),
+    path("<int:pk>/watch/", views.watch_toggle, name="watch_toggle"),
+    path("watchlist/", views.watchlist, name="watchlist"),
+    path("my-bids/", views.my_bids, name="my_bids"),
+    path("bids/<int:pk>/withdraw/", views.bid_withdraw, name="bid_withdraw"),
     # Sellers
     path("lots/mine/", views.my_lots, name="my_lots"),
     path("lots/new/", views.lot_create, name="lot_create"),

@@ -24,6 +24,16 @@
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'auctions:auction_list' %}">Auctions</a>
                     </li>
+                    {% if user.is_authenticated %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'auctions:watchlist' %}">Watchlist</a>
+                        </li>
+                    {% endif %}
+                    {% if user.is_bidder or user.is_seller %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'auctions:my_bids' %}">My bids</a>
+                        </li>
+                    {% endif %}
                     {% if user.is_seller %}
                         <li class="nav-item">
                             <a class="nav-link" href="{% url 'auctions:my_lots' %}">My lots</a>

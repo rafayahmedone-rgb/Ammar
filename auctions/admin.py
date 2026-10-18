@@ -2,7 +2,7 @@ from django.contrib import admin
 
 from core.services import log_action
 
-from .models import Auction, Category, Lot
+from .models import Auction, Bid, Category, Lot, Watchlist
 
 
 @admin.register(Category)
@@ -60,3 +60,16 @@ class LotAdmin(ViewOnlyAdmin):
 class AuctionAdmin(ViewOnlyAdmin):
     list_display = ("lot", "status", "start_time", "end_time")
     list_filter = ("status",)
+
+
+@admin.register(Bid)
+class BidAdmin(ViewOnlyAdmin):
+    list_display = ("auction", "bidder", "amount", "created_at",
+                    "is_withdrawn")
+    list_filter = ("is_withdrawn",)
+    search_fields = ("bidder__username", "auction__lot__title")
+
+
+@admin.register(Watchlist)
+class WatchlistAdmin(ViewOnlyAdmin):
+    list_display = ("user", "auction", "created_at")

@@ -6,11 +6,11 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from core.models import AuditLog
+from core.models import AuditLog, PlatformConfig
 
 from . import services
 from .forms import LotForm, ModeratorLotForm
-from .models import Auction, Category, Lot
+from .models import Auction, Category, Lot, Watchlist
 
 User = get_user_model()
 
@@ -390,3 +390,302 @@ class PublicPageTests(AuctionTestCase):
 
         self.assertContains(response, "Cedar chest")
         self.assertNotContains(response, "250.00")
+
+
+class BiddingTestCase(AuctionTestCase):
+    """Adds a second bidder and a live auction (starting price $100)."""
+
+    def setUp(self):
+        super().setUp()
+        self.bidder2 = User.objects.create_user(
+            username="bea", password="x", role=User.Role.BIDDER
+        )
+        self.lot = self.make_lot()
+        self.auction = services.approve_lot(self.moderator, self.lot)
+
+    def bid(self, user, amount):
+        return services.place_bid(user, self.auction, Decimal(amount))
+
+
+class MinimumBidTests(BiddingTestCase):
+    def test_first_bid_minimum_is_starting_price(self):
+        self.assertEqual(
+            services.minimum_bid(self.auction), Decimal("100.00")
+        )
+
+    def test_later_minimum_adds_increment(self):
+        self.bid(self.bidder, "100.00")
+
+        # 100 x 1.05 = 105
+        self.assertEqual(
+            services.minimum_bid(self.auction), Decimal("105.00")
+        )
+
+    def test_minimum_rounds_up_to_cents(self):
+        self.bid(self.bidder, "133.33")
+
+        # 133.33 x 1.05 = 139.9965, rounded up to 140.00
+        self.assertEqual(
+            services.minimum_bid(self.auction), Decimal("140.00")
+        )
+
+    def test_increment_comes_from_platform_config(self):
+        config = PlatformConfig.load()
+        config.bid_increment_percent = Decimal("10")
+        config.save()
+        self.bid(self.bidder, "100.00")
+
+        self.assertEqual(
+            services.minimum_bid(self.auction), Decimal("110.00")
+        )
+
+
+class PlaceBidTests(BiddingTestCase):
+    def test_first_bid_below_starting_price_is_refused(self):
+        with self.assertRaises(services.BidError):
+            self.bid(self.bidder, "99.99")
+
+    def test_first_bid_at_starting_price_is_accepted(self):
+        bid = self.bid(self.bidder, "100.00")
+
+        self.assertEqual(self.auction.highest_bid(), bid)
+        log = AuditLog.objects.get(action="BID_PLACED")
+        self.assertEqual(log.user, self.bidder)
+
+    def test_bid_below_increment_is_refused(self):
+        self.bid(self.bidder, "100.00")
+
+        with self.assertRaises(services.BidError):
+            self.bid(self.bidder2, "104.99")
+        self.bid(self.bidder2, "105.00")
+        self.assertEqual(
+            self.auction.highest_bid().amount, Decimal("105.00")
+        )
+
+    def test_seller_cannot_bid_on_own_lot(self):
+        with self.assertRaises(services.BidError):
+            self.bid(self.seller, "200.00")
+
+    def test_seller_can_bid_on_another_sellers_lot(self):
+        bid = self.bid(self.other_seller, "100.00")
+
+        self.assertEqual(bid.bidder, self.other_seller)
+
+    def test_moderator_and_admin_cannot_bid(self):
+        for user in (self.moderator, self.admin):
+            with self.assertRaises(services.BidError):
+                self.bid(user, "100.00")
+
+    def test_cannot_bid_after_end_time(self):
+        self.auction.end_time = timezone.now() - timedelta(seconds=1)
+        self.auction.save()
+
+        with self.assertRaises(services.BidError):
+            self.bid(self.bidder, "100.00")
+
+    def test_cannot_bid_on_closed_auction(self):
+        self.auction.status = Auction.Status.CANCELLED
+        self.auction.save()
+
+        with self.assertRaises(services.BidError):
+            self.bid(self.bidder, "100.00")
+
+
+class AntiSnipingTests(BiddingTestCase):
+    def set_time_left(self, delta):
+        self.auction.end_time = timezone.now() + delta
+        self.auction.save()
+        return self.auction.end_time
+
+    def test_bid_in_last_two_minutes_extends_auction(self):
+        old_end = self.set_time_left(timedelta(seconds=90))
+
+        self.bid(self.bidder, "100.00")
+
+        self.auction.refresh_from_db()
+        self.assertEqual(self.auction.end_time, old_end + timedelta(minutes=2))
+        self.assertEqual(self.auction.extension_count, 1)
+        self.assertTrue(
+            AuditLog.objects.filter(action="AUCTION_EXTENDED").exists()
+        )
+
+    def test_earlier_bid_does_not_extend(self):
+        old_end = self.set_time_left(timedelta(minutes=10))
+
+        self.bid(self.bidder, "100.00")
+
+        self.auction.refresh_from_db()
+        self.assertEqual(self.auction.end_time, old_end)
+        self.assertEqual(self.auction.extension_count, 0)
+
+    def test_extensions_stop_at_configured_maximum(self):
+        config = PlatformConfig.load()
+        config.max_extensions = 2
+        config.save()
+        self.set_time_left(timedelta(seconds=30))
+
+        # Each bid lands in the last 2 minutes, so would extend if allowed.
+        for amount in ("100.00", "105.00", "111.00"):
+            self.auction.end_time = timezone.now() + timedelta(seconds=30)
+            self.auction.save()
+            self.bid(self.bidder, amount)
+            self.auction.refresh_from_db()
+
+        self.assertEqual(self.auction.extension_count, 2)
+
+
+class WithdrawBidTests(BiddingTestCase):
+    def test_moderator_withdraws_bid_and_next_bid_leads(self):
+        first = self.bid(self.bidder, "100.00")
+        second = self.bid(self.bidder2, "105.00")
+        self.client.force_login(self.moderator)
+
+        self.client.post(
+            reverse("auctions:bid_withdraw", args=[second.pk]),
+            {"reason": "Bidder asked, typing error."},
+        )
+
+        second.refresh_from_db()
+        self.assertTrue(second.is_withdrawn)
+        self.assertEqual(second.withdrawn_by, self.moderator)
+        self.assertEqual(self.auction.highest_bid(), first)
+        # The minimum is now based on the remaining $100 bid.
+        self.assertEqual(
+            services.minimum_bid(self.auction), Decimal("105.00")
+        )
+        log = AuditLog.objects.get(action="BID_WITHDRAWN")
+        self.assertIn("typing error", log.details)
+
+    def test_bidder_cannot_withdraw_bid(self):
+        bid = self.bid(self.bidder, "100.00")
+        self.client.force_login(self.bidder)
+
+        response = self.client.post(
+            reverse("auctions:bid_withdraw", args=[bid.pk]),
+            {"reason": "Changed my mind"},
+        )
+
+        self.assertEqual(response.status_code, 403)
+        bid.refresh_from_db()
+        self.assertFalse(bid.is_withdrawn)
+
+    def test_withdraw_needs_a_reason(self):
+        bid = self.bid(self.bidder, "100.00")
+        self.client.force_login(self.moderator)
+
+        self.client.post(
+            reverse("auctions:bid_withdraw", args=[bid.pk]), {"reason": ""}
+        )
+
+        bid.refresh_from_db()
+        self.assertFalse(bid.is_withdrawn)
+
+    def test_cannot_withdraw_twice(self):
+        bid = self.bid(self.bidder, "100.00")
+        services.withdraw_bid(self.moderator, bid, "First")
+
+        with self.assertRaises(services.BidError):
+            services.withdraw_bid(self.moderator, bid, "Second")
+
+
+class BidViewTests(BiddingTestCase):
+    def detail_url(self):
+        return reverse("auctions:lot_detail", args=[self.lot.pk])
+
+    def test_bid_through_the_page(self):
+        self.client.force_login(self.bidder)
+
+        response = self.client.post(
+            reverse("auctions:bid_place", args=[self.auction.pk]),
+            {"amount": "120.00"},
+        )
+
+        self.assertRedirects(response, self.detail_url())
+        self.assertEqual(
+            self.auction.highest_bid().amount, Decimal("120.00")
+        )
+
+    def test_low_bid_shows_error_message(self):
+        self.client.force_login(self.bidder)
+
+        response = self.client.post(
+            reverse("auctions:bid_place", args=[self.auction.pk]),
+            {"amount": "50.00"},
+            follow=True,
+        )
+
+        self.assertContains(response, "Your bid must be at least $100.00")
+        self.assertIsNone(self.auction.highest_bid())
+
+    def test_anonymous_user_must_log_in_to_bid(self):
+        response = self.client.post(
+            reverse("auctions:bid_place", args=[self.auction.pk]),
+            {"amount": "120.00"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse("accounts:login"), response.url)
+        self.assertIsNone(self.auction.highest_bid())
+
+    def test_withdrawn_bids_hidden_from_public(self):
+        bid = self.bid(self.bidder, "123.45")
+        services.withdraw_bid(self.moderator, bid, "Shill bidding")
+
+        response = self.client.get(self.detail_url())
+        self.assertNotContains(response, "123.45")
+
+        self.client.force_login(self.moderator)
+        response = self.client.get(self.detail_url())
+        self.assertContains(response, "123.45")
+        self.assertContains(response, "Shill bidding")
+
+    def test_seller_sees_no_bid_form_on_own_lot(self):
+        self.client.force_login(self.seller)
+
+        response = self.client.get(self.detail_url())
+
+        self.assertNotContains(response, "Place bid")
+
+    def test_lists_show_current_price(self):
+        self.bid(self.bidder, "150.00")
+        self.bid(self.bidder2, "200.00")
+
+        response = self.client.get(reverse("auctions:auction_list"))
+        self.assertContains(response, "$200.00")
+
+        # My bids: bob's best is 150, but the current price is 200.
+        self.client.force_login(self.bidder)
+        response = self.client.get(reverse("auctions:my_bids"))
+        self.assertContains(response, "$150.00")
+        self.assertContains(response, "$200.00")
+        self.assertContains(response, "Outbid")
+
+
+class WatchlistTests(BiddingTestCase):
+    def test_toggle_adds_then_removes(self):
+        self.client.force_login(self.bidder)
+        url = reverse("auctions:watch_toggle", args=[self.auction.pk])
+
+        self.client.post(url)
+        self.assertTrue(
+            Watchlist.objects.filter(
+                user=self.bidder, auction=self.auction
+            ).exists()
+        )
+        response = self.client.get(reverse("auctions:watchlist"))
+        self.assertContains(response, "Cedar chest")
+
+        self.client.post(url)
+        self.assertFalse(Watchlist.objects.exists())
+
+        actions = list(
+            AuditLog.objects.filter(action__startswith="WATCHLIST")
+            .order_by("created_at")
+            .values_list("action", flat=True)
+        )
+        self.assertEqual(actions, ["WATCHLIST_ADDED", "WATCHLIST_REMOVED"])
+
+    def test_watchlist_requires_login(self):
+        response = self.client.get(reverse("auctions:watchlist"))
+
+        self.assertEqual(response.status_code, 302)

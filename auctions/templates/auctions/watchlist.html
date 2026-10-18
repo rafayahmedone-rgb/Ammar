@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block title %}Watchlist | Southern Cross Auctions{% endblock %}
+
+{% block content %}
+<h1 class="h3 mb-3">My watchlist</h1>
+
+<div class="table-responsive">
+    <table class="table align-middle">
+        <thead>
+            <tr>
+                <th>Lot</th>
+                <th>Current bid</th>
+                <th>Status</th>
+                <th>Ends</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for auction in auctions %}
+                <tr>
+                    <td><a href="{% url 'auctions:lot_detail' auction.lot.pk %}">{{ auction.lot.title }}</a></td>
+                    <td>{% if auction.current_price %}${{ auction.current_price|floatformat:2 }}{% else %}-{% endif %}</td>
+                    <td>{{ auction.get_status_display }}</td>
+                    <td>{{ auction.end_time|date:"j M Y, g:i A" }}</td>
+                </tr>
+            {% empty %}
+                <tr><td colspan="4">You are not watching any auctions.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

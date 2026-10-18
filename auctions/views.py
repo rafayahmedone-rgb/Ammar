@@ -1,4 +1,6 @@
 from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+from django.db.models import Max, Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -8,8 +10,18 @@ from accounts.models import User
 from accounts.permissions import role_required
 
 from . import services
-from .forms import LotForm, ModeratorLotForm, RejectLotForm
-from .models import Auction, Category, Lot
+from .forms import (
+    BidForm,
+    LotForm,
+    ModeratorLotForm,
+    RejectLotForm,
+    WithdrawBidForm,
+)
+from .models import Auction, Bid, Category, Lot, Watchlist
+
+# Highest bid per auction, ignoring withdrawn bids. Used with annotate()
+# so a list of auctions gets each one's current price in a single query.
+CURRENT_PRICE = Max("bids__amount", filter=Q(bids__is_withdrawn=False))
 
 # ---------------------------------------------------------------------------
 # Public pages
@@ -25,6 +37,7 @@ def auction_list(request):
         )
         # select_related fetches the lot and category in the same query.
         .select_related("lot", "lot__category")
+        .annotate(current_price=CURRENT_PRICE)
     )
 
     category_id = request.GET.get("category")
@@ -63,9 +76,138 @@ def lot_detail(request, pk):
 
     # getattr(...) returns None when the lot has no auction yet.
     auction = getattr(lot, "auction", None)
-    return render(
-        request, "auctions/lot_detail.html", {"lot": lot, "auction": auction}
+    context = {"lot": lot, "auction": auction}
+    if auction is not None:
+        context.update(auction_context(request.user, auction))
+    return render(request, "auctions/lot_detail.html", context)
+
+
+def auction_context(user, auction):
+    """Everything the lot page needs to show the bidding panel."""
+    is_moderator = user.is_authenticated and user.is_moderator
+    is_open = (
+        auction.status == Auction.Status.ACTIVE
+        and timezone.now() < auction.end_time
     )
+    can_bid = (
+        is_open
+        and user.is_authenticated
+        and user.role in services.BIDDING_ROLES
+        and auction.lot.seller_id != user.pk
+    )
+
+    bids = auction.bids.select_related("bidder")
+    if not is_moderator:
+        # Only Moderators see withdrawn bids.
+        bids = bids.filter(is_withdrawn=False)
+
+    return {
+        "highest_bid": auction.highest_bid(),
+        "minimum_bid": services.minimum_bid(auction),
+        "bids": bids,
+        "is_open": is_open,
+        "can_bid": can_bid,
+        "bid_form": BidForm(),
+        "is_moderator": is_moderator,
+        "withdraw_form": WithdrawBidForm(),
+        "is_watching": (
+            user.is_authenticated
+            and Watchlist.objects.filter(user=user, auction=auction).exists()
+        ),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Bidding and watchlist
+# ---------------------------------------------------------------------------
+
+
+@require_POST
+@role_required(*services.BIDDING_ROLES)
+def bid_place(request, pk):
+    auction = get_object_or_404(Auction, pk=pk)
+    form = BidForm(request.POST)
+
+    if not form.is_valid():
+        messages.error(request, "Please enter a valid amount, e.g. 125.50.")
+    else:
+        try:
+            bid = services.place_bid(
+                request.user, auction, form.cleaned_data["amount"]
+            )
+        except services.BidError as error:
+            messages.error(request, str(error))
+        else:
+            messages.success(request, f"Your bid of ${bid.amount} was placed.")
+
+    return redirect("auctions:lot_detail", pk=auction.lot_id)
+
+
+@require_POST
+@role_required(User.Role.MODERATOR)
+def bid_withdraw(request, pk):
+    bid = get_object_or_404(Bid.objects.select_related("auction"), pk=pk)
+    form = WithdrawBidForm(request.POST)
+
+    if not form.is_valid():
+        messages.error(request, "A reason is required to withdraw a bid.")
+    else:
+        try:
+            services.withdraw_bid(
+                request.user, bid, form.cleaned_data["reason"]
+            )
+        except services.BidError as error:
+            messages.error(request, str(error))
+        else:
+            messages.success(request, "The bid was withdrawn.")
+
+    return redirect("auctions:lot_detail", pk=bid.auction.lot_id)
+
+
+@require_POST
+@login_required
+def watch_toggle(request, pk):
+    auction = get_object_or_404(Auction, pk=pk)
+    if services.toggle_watch(request.user, auction):
+        messages.success(request, "Added to your watchlist.")
+    else:
+        messages.info(request, "Removed from your watchlist.")
+    return redirect("auctions:lot_detail", pk=auction.lot_id)
+
+
+@login_required
+def watchlist(request):
+    auctions = (
+        Auction.objects.filter(watchers__user=request.user)
+        .select_related("lot", "lot__category")
+        .annotate(current_price=CURRENT_PRICE)
+    )
+    return render(
+        request, "auctions/watchlist.html", {"auctions": auctions}
+    )
+
+
+@role_required(*services.BIDDING_ROLES)
+def my_bids(request):
+    """Auctions the user has bid on, with their best bid in each."""
+    # A subquery is used instead of filter(bids__bidder=...) because that
+    # filter would also limit CURRENT_PRICE to this user's bids only.
+    my_auction_ids = Bid.objects.filter(bidder=request.user).values(
+        "auction_id"
+    )
+    auctions = (
+        Auction.objects.filter(pk__in=my_auction_ids)
+        .select_related("lot")
+        .annotate(
+            current_price=CURRENT_PRICE,
+            my_best=Max(
+                "bids__amount",
+                filter=Q(bids__bidder=request.user, bids__is_withdrawn=False),
+            ),
+        )
+        .order_by("end_time")
+    )
+    return render(request, "auctions/my_bids.html", {"auctions": auctions})
 
 
 # ---------------------------------------------------------------------------
