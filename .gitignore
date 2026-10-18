@@ -1,0 +1,21 @@
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Django
+db.sqlite3
+staticfiles/
+media/
+
+# Celery Beat schedule file
+celerybeat-schedule*
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
