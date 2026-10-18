@@ -18,6 +18,9 @@ from functools import wraps
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import redirect_to_login
 from django.core.exceptions import PermissionDenied
+from rest_framework.permissions import BasePermission
+
+from .models import User
 
 
 def role_required(*roles):
@@ -50,3 +53,35 @@ class RoleRequiredMixin(LoginRequiredMixin):
         if request.user.role not in self.allowed_roles:
             raise PermissionDenied
         return super().dispatch(request, *args, **kwargs)
+
+
+# ---------------------------------------------------------------------------
+# The same idea for the REST API (Django REST Framework permission classes)
+# ---------------------------------------------------------------------------
+
+
+class HasRole(BasePermission):
+    """
+    API permission: the user must be logged in and have one of
+    allowed_roles. Subclass it and set allowed_roles.
+    """
+
+    allowed_roles = ()
+
+    def has_permission(self, request, view):
+        return (
+            request.user.is_authenticated
+            and request.user.role in self.allowed_roles
+        )
+
+
+class IsSeller(HasRole):
+    allowed_roles = (User.Role.SELLER,)
+
+
+class IsModerator(HasRole):
+    allowed_roles = (User.Role.MODERATOR,)
+
+
+class CanBid(HasRole):
+    allowed_roles = (User.Role.BIDDER, User.Role.SELLER)

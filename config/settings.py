@@ -206,12 +206,23 @@ REST_FRAMEWORK = {
         "rest_framework.permissions.IsAuthenticated",
     ],
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    # Lists come back 20 at a time: {"count", "next", "previous", "results"}
+    "DEFAULT_PAGINATION_CLASS":
+        "rest_framework.pagination.PageNumberPagination",
+    "PAGE_SIZE": 20,
 }
 
 SPECTACULAR_SETTINGS = {
     "TITLE": "Southern Cross Auctions API",
     "DESCRIPTION": "REST API for the Southern Cross Auctions platform.",
     "VERSION": "1.0.0",
+    # Several models have a "status" field; give each list of choices its
+    # own clear name in the docs.
+    "ENUM_NAME_OVERRIDES": {
+        "LotStatusEnum": "auctions.models.Lot.Status",
+        "AuctionStatusEnum": "auctions.models.Auction.Status",
+        "PaymentStatusEnum": "payments.models.Payment.Status",
+    },
 }
 
 

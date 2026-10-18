@@ -1,8 +1,8 @@
 """
 Top-level URL configuration.
 
-Web pages use normal URLs; the REST API will live under /api/ in a later
-phase.
+Web pages use normal URLs; the REST API lives under /api/
+(see config/api_urls.py).
 """
 
 from django.contrib import admin
@@ -14,5 +14,6 @@ urlpatterns = [
     path("auctions/", include("auctions.urls")),
     path("payments/", include("payments.urls")),
     path("notifications/", include("notifications.urls")),
+    path("api/", include("config.api_urls")),
     path("", include("core.urls")),
 ]

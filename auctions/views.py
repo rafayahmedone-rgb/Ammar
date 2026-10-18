@@ -21,6 +21,8 @@ from .models import Auction, Bid, Category, Lot, Watchlist
 
 # Highest bid per auction, ignoring withdrawn bids. Used with annotate()
 # so a list of auctions gets each one's current price in a single query.
+# Note: Django ignores Meta.ordering on these grouped queries, so every
+# list that uses it needs its own .order_by().
 CURRENT_PRICE = Max("bids__amount", filter=Q(bids__is_withdrawn=False))
 
 # ---------------------------------------------------------------------------
@@ -38,6 +40,7 @@ def auction_list(request):
         # select_related fetches the lot and category in the same query.
         .select_related("lot", "lot__category")
         .annotate(current_price=CURRENT_PRICE)
+        .order_by("end_time")
     )
 
     category_id = request.GET.get("category")
@@ -183,6 +186,7 @@ def watchlist(request):
         Auction.objects.filter(watchers__user=request.user)
         .select_related("lot", "lot__category")
         .annotate(current_price=CURRENT_PRICE)
+        .order_by("end_time")
     )
     return render(
         request, "auctions/watchlist.html", {"auctions": auctions}
