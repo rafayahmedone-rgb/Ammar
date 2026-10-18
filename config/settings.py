@@ -134,6 +134,11 @@ else:
 # Our own User model with a role field (see accounts/models.py).
 AUTH_USER_MODEL = "accounts.User"
 
+# Where to send people to log in, and where to go after login/logout.
+LOGIN_URL = "accounts:login"
+LOGIN_REDIRECT_URL = "core:home"
+LOGOUT_REDIRECT_URL = "core:home"
+
 _VALIDATORS = "django.contrib.auth.password_validation."
 
 AUTH_PASSWORD_VALIDATORS = [

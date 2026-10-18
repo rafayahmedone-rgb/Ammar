@@ -1,5 +1,18 @@
 from django.contrib.auth.models import AbstractUser
+from django.contrib.auth.models import UserManager as DjangoUserManager
 from django.db import models
+
+
+class UserManager(DjangoUserManager):
+    """Django's user manager, but superusers get the ADMIN role."""
+
+    def create_superuser(self, username, email=None, password=None,
+                         **extra_fields):
+        # setdefault only fills in the role if the caller did not give one.
+        extra_fields.setdefault("role", self.model.Role.ADMIN)
+        return super().create_superuser(
+            username, email, password, **extra_fields
+        )
 
 
 class User(AbstractUser):
@@ -22,6 +35,8 @@ class User(AbstractUser):
         choices=Role.choices,
         default=Role.BIDDER,
     )
+
+    objects = UserManager()
 
     def __str__(self):
         return f"{self.username} ({self.get_role_display()})"
