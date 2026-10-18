@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block title %}Review "{{ lot.title }}" | Southern Cross Auctions{% endblock %}
+
+{% block content %}
+<a href="{% url 'auctions:moderation_queue' %}">&larr; Back to queue</a>
+
+<h1 class="h3 mt-2">{{ lot.title }}</h1>
+<p class="text-muted">
+    {{ lot.category.name }} &middot; Seller: {{ lot.seller.username }}
+    &middot; Status: {{ lot.get_status_display }}
+</p>
+
+<div class="row">
+    <div class="col-md-7">
+        <p style="white-space: pre-line;">{{ lot.description }}</p>
+        <ul class="list-unstyled">
+            <li>Starting price: ${{ lot.starting_price }}</li>
+            <li>Reserve price: {% if lot.reserve_price %}${{ lot.reserve_price }}{% else %}none{% endif %}</li>
+            <li>Auction length: {{ lot.get_duration_days_display }}</li>
+        </ul>
+        <a href="{% url 'auctions:moderator_edit' lot.pk %}" class="btn btn-outline-secondary">
+            Edit category / description
+        </a>
+    </div>
+
+    {% if lot.status == "PENDING" %}
+        <div class="col-md-5">
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h2 class="h5">Approve</h2>
+                    <p class="small">The auction starts straight away.</p>
+                    <form method="post" action="{% url 'auctions:lot_approve' lot.pk %}">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-success">Approve lot</button>
+                    </form>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-body">
+                    <h2 class="h5">Reject</h2>
+                    <form method="post" action="{% url 'auctions:lot_reject' lot.pk %}" novalidate>
+                        {% csrf_token %}
+                        {% include "includes/form_fields.html" with form=reject_form %}
+                        <button type="submit" class="btn btn-danger">Reject lot</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

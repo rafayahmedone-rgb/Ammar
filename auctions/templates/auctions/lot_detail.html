@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}{{ lot.title }} | Southern Cross Auctions{% endblock %}
+
+{% block content %}
+<h1 class="h3">{{ lot.title }}</h1>
+<p class="text-muted">{{ lot.category.name }} &middot; Sold by {{ lot.seller.username }}</p>
+
+{% if lot.status != "APPROVED" %}
+    {# Only the seller and Moderators/Admins can reach this part. #}
+    <div class="alert alert-warning">
+        Status: <strong>{{ lot.get_status_display }}</strong>
+        {% if lot.rejection_reason %}<br>Reason: {{ lot.rejection_reason }}{% endif %}
+    </div>
+{% endif %}
+
+<div class="row">
+    <div class="col-md-8">
+        <p style="white-space: pre-line;">{{ lot.description }}</p>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <p class="mb-1">Starting price: <strong>${{ lot.starting_price }}</strong></p>
+                {% if auction %}
+                    <p class="mb-1">Auction: {{ auction.get_status_display }}</p>
+                    <p class="mb-0">Ends {{ auction.end_time|date:"j M Y, g:i A" }}</p>
+                {% else %}
+                    <p class="mb-0">Auction length: {{ lot.get_duration_days_display }}</p>
+                {% endif %}
+                {# Bidding is added in a later phase. #}
+            </div>
+        </div>
+        {% if user == lot.seller and lot.seller_can_edit %}
+            <a href="{% url 'auctions:lot_edit' lot.pk %}" class="btn btn-outline-primary mt-3">Edit lot</a>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

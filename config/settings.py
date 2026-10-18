@@ -134,6 +134,11 @@ else:
 # Our own User model with a role field (see accounts/models.py).
 AUTH_USER_MODEL = "accounts.User"
 
+if TESTING:
+    # A fast (but weak) hasher so tests that create users run quickly.
+    # Never used outside "manage.py test".
+    PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
+
 # Where to send people to log in, and where to go after login/logout.
 LOGIN_URL = "accounts:login"
 LOGIN_REDIRECT_URL = "core:home"

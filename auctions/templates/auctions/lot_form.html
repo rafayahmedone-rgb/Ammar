@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}{% if is_new %}Sell an item{% else %}Edit lot{% endif %} | Southern Cross Auctions{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <h1 class="h3 mb-3">{% if is_new %}Sell an item{% else %}Edit "{{ lot.title }}"{% endif %}</h1>
+
+        {% if lot.status == "REJECTED" %}
+            <div class="alert alert-warning">
+                This lot was rejected: {{ lot.rejection_reason }}<br>
+                Saving your changes sends it back for review.
+            </div>
+        {% else %}
+            <p class="text-muted">A Moderator reviews every lot before its auction starts.</p>
+        {% endif %}
+
+        <form method="post" novalidate>
+            {% csrf_token %}
+            {% include "includes/form_fields.html" %}
+            <button type="submit" class="btn btn-primary">
+                {% if is_new %}Submit for review{% else %}Save changes{% endif %}
+            </button>
+            <a href="{% url 'auctions:my_lots' %}" class="btn btn-link">Cancel</a>
+        </form>
+    </div>
+</div>
+{% endblock %}

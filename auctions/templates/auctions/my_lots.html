@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block title %}My lots | Southern Cross Auctions{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">My lots</h1>
+    <a href="{% url 'auctions:lot_create' %}" class="btn btn-primary">Sell an item</a>
+</div>
+
+<div class="table-responsive">
+    <table class="table align-middle">
+        <thead>
+            <tr>
+                <th>Title</th>
+                <th>Category</th>
+                <th>Starting price</th>
+                <th>Reserve</th>
+                <th>Status</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for lot in lots %}
+                <tr>
+                    <td><a href="{% url 'auctions:lot_detail' lot.pk %}">{{ lot.title }}</a></td>
+                    <td>{{ lot.category.name }}</td>
+                    <td>${{ lot.starting_price }}</td>
+                    <td>{% if lot.reserve_price %}${{ lot.reserve_price }}{% else %}-{% endif %}</td>
+                    <td>
+                        {{ lot.get_status_display }}
+                        {% if lot.rejection_reason %}
+                            <div class="small text-danger">{{ lot.rejection_reason }}</div>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if lot.seller_can_edit %}
+                            <a href="{% url 'auctions:lot_edit' lot.pk %}" class="btn btn-sm btn-outline-primary">Edit</a>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% empty %}
+                <tr><td colspan="6">You have not listed any lots yet.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

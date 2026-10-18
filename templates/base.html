@@ -20,6 +20,24 @@
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="mainNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'auctions:auction_list' %}">Auctions</a>
+                    </li>
+                    {% if user.is_seller %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'auctions:my_lots' %}">My lots</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'auctions:lot_create' %}">Sell an item</a>
+                        </li>
+                    {% endif %}
+                    {% if user.is_moderator %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'auctions:moderation_queue' %}">Moderation</a>
+                        </li>
+                    {% endif %}
+                </ul>
                 <ul class="navbar-nav ms-auto align-items-lg-center">
                     {% if user.is_authenticated %}
                         <li class="nav-item">
