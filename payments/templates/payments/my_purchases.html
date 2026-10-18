@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}My purchases | Southern Cross Auctions{% endblock %}
+
+{% block content %}
+<h1 class="h3 mb-3">My purchases</h1>
+
+<div class="table-responsive">
+    <table class="table align-middle">
+        <thead>
+            <tr>
+                <th>Lot</th>
+                <th>Total (inc. GST)</th>
+                <th>Status</th>
+                <th>Pay by</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for payment in payments %}
+                <tr>
+                    <td>{{ payment.auction.lot.title }}</td>
+                    <td>${{ payment.total_amount }}</td>
+                    <td>{{ payment.get_status_display }}</td>
+                    <td>{% if payment.status == "PENDING" %}{{ payment.due_at|date:"j M Y, g:i A" }}{% else %}-{% endif %}</td>
+                    <td>
+                        <a href="{% url 'payments:payment_detail' payment.pk %}" class="btn btn-sm {% if payment.status == 'PENDING' %}btn-success{% else %}btn-outline-secondary{% endif %}">
+                            {% if payment.status == "PENDING" %}Pay now{% else %}View{% endif %}
+                        </a>
+                    </td>
+                </tr>
+            {% empty %}
+                <tr><td colspan="5">You have not won any auctions yet.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

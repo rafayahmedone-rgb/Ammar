@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block title %}Payment | Southern Cross Auctions{% endblock %}
+
+{% block content %}
+{% with lot=payment.auction.lot %}
+<h1 class="h3">{{ lot.title }}</h1>
+<p class="text-muted">
+    Sold to {{ payment.buyer.username }} &middot;
+    Status: <strong>{{ payment.get_status_display }}</strong>
+    {% if payment.reference %}&middot; Ref: {{ payment.reference }}{% endif %}
+</p>
+
+<div class="row g-3">
+    {% if is_buyer %}
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">You pay</div>
+                <div class="card-body">
+                    <table class="table table-sm mb-3">
+                        <tr><td>Winning bid</td><td class="text-end">${{ payment.hammer_price }}</td></tr>
+                        <tr><td>GST ({{ gst_percent }}%)</td><td class="text-end">${{ payment.gst_amount }}</td></tr>
+                        <tr class="fw-bold"><td>Total</td><td class="text-end">${{ payment.total_amount }}</td></tr>
+                    </table>
+
+                    {% if payment.status == "PENDING" %}
+                        <p class="small">Please pay by {{ payment.due_at|date:"j M Y, g:i A" }} ({{ payment.due_at|timeuntil }} left).</p>
+                        {# Mock payment: no card details are collected. #}
+                        <form method="post" action="{% url 'payments:pay_now' payment.pk %}">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-success w-100">Pay now ${{ payment.total_amount }}</button>
+                        </form>
+                        <p class="small text-muted mt-2 mb-0">Demo only: no real payment is taken.</p>
+                    {% elif payment.status == "PAID" %}
+                        <p class="mb-0 text-success">Paid on {{ payment.paid_at|date:"j M Y, g:i A" }}.</p>
+                    {% else %}
+                        <p class="mb-0 text-danger">This sale was cancelled because payment was not made within 48 hours.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    {% endif %}
+
+    {% if show_seller_view %}
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">Seller receives</div>
+                <div class="card-body">
+                    <table class="table table-sm mb-0">
+                        <tr><td>Winning bid</td><td class="text-end">${{ payment.hammer_price }}</td></tr>
+                        <tr><td>Platform commission ({{ payment.commission_percent }}%)</td><td class="text-end">-${{ payment.commission_amount }}</td></tr>
+                        <tr class="fw-bold"><td>Payout</td><td class="text-end">${{ payment.seller_payout }}</td></tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+</div>
+
+<a href="{% url 'auctions:lot_detail' lot.pk %}" class="btn btn-link mt-3 px-0">View lot</a>
+{% endwith %}
+{% endblock %}

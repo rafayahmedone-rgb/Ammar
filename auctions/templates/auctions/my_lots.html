@@ -17,6 +17,7 @@
                 <th>Starting price</th>
                 <th>Reserve</th>
                 <th>Status</th>
+                <th>Auction</th>
                 <th></th>
             </tr>
         </thead>
@@ -34,13 +35,27 @@
                         {% endif %}
                     </td>
                     <td>
+                        {% if lot.auction %}
+                            {{ lot.auction.get_status_display }}
+                            {% if lot.auction.payment %}
+                                <div class="small">
+                                    <a href="{% url 'payments:payment_detail' lot.auction.payment.pk %}">
+                                        {{ lot.auction.payment.get_status_display }}
+                                    </a>
+                                </div>
+                            {% endif %}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                    <td>
                         {% if lot.seller_can_edit %}
                             <a href="{% url 'auctions:lot_edit' lot.pk %}" class="btn btn-sm btn-outline-primary">Edit</a>
                         {% endif %}
                     </td>
                 </tr>
             {% empty %}
-                <tr><td colspan="6">You have not listed any lots yet.</td></tr>
+                <tr><td colspan="7">You have not listed any lots yet.</td></tr>
             {% endfor %}
         </tbody>
     </table>

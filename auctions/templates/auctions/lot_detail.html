@@ -88,10 +88,17 @@
                                 Log in to bid
                             </a>
                         {% endif %}
+                    {% elif auction.status == "ACTIVE" %}
+                        <p class="mb-0">Bidding has ended. Results will appear shortly.</p>
+                    {% elif auction.status == "SOLD" %}
+                        <p class="mb-2"><strong>Sold</strong> for ${{ payment.hammer_price }}.</p>
+                        {% if user == payment.buyer or user == lot.seller %}
+                            <a href="{% url 'payments:payment_detail' payment.pk %}" class="btn btn-sm btn-success">
+                                {% if user == payment.buyer and payment.status == "PENDING" %}Pay now{% else %}View sale{% endif %}
+                            </a>
+                        {% endif %}
                     {% else %}
-                        <p class="mb-0">
-                            {% if auction.status == "ACTIVE" %}Bidding has ended.{% else %}Auction {{ auction.get_status_display|lower }}.{% endif %}
-                        </p>
+                        <p class="mb-0">Auction {{ auction.get_status_display|lower }}.</p>
                     {% endif %}
                 {% else %}
                     <p class="mb-0">Auction length: {{ lot.get_duration_days_display }}</p>

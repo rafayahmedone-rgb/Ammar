@@ -270,3 +270,77 @@ def toggle_watch(user, auction):
         Watchlist.objects.create(user=user, auction=auction)
         log_action(user, "WATCHLIST_ADDED", target=auction)
         return True
+
+
+# ---------------------------------------------------------------------------
+# Closing auctions
+# ---------------------------------------------------------------------------
+
+
+def close_auction(auction):
+    """
+    Close one auction whose end time has passed.
+
+    - Highest bid >= reserve (or no reserve): SOLD, and a Payment is
+      created for the winning bidder.
+    - Otherwise (no bids, or reserve not met): NOT_SOLD.
+
+    Returns True if the auction was closed by this call.
+    """
+    # Imported here, not at the top, because payments.services imports
+    # auctions.models; importing it at the top could cause a circular
+    # import.
+    from payments.services import create_payment
+
+    with transaction.atomic():
+        # Same lock as place_bid, so no bid can sneak in while closing.
+        auction = (
+            Auction.objects.select_for_update()
+            .select_related("lot")
+            .get(pk=auction.pk)
+        )
+        # Check again under the lock: another worker may have closed it,
+        # or a last-second bid may have extended it.
+        if (auction.status != Auction.Status.ACTIVE
+                or timezone.now() < auction.end_time):
+            return False
+
+        winning_bid = auction.highest_bid()
+        reserve = auction.lot.reserve_price
+        reserve_met = winning_bid is not None and (
+            reserve is None or winning_bid.amount >= reserve
+        )
+
+        if reserve_met:
+            auction.status = Auction.Status.SOLD
+            auction.save(update_fields=["status"])
+            create_payment(auction, winning_bid)
+            details = (f"Sold to {winning_bid.bidder.username} "
+                       f"for ${winning_bid.amount}")
+        else:
+            auction.status = Auction.Status.NOT_SOLD
+            auction.save(update_fields=["status"])
+            if winning_bid is None:
+                details = "No bids"
+            else:
+                details = (f"Reserve not met (highest bid "
+                           f"${winning_bid.amount})")
+
+        log_action(None, "AUCTION_CLOSED", target=auction, details=details)
+    return True
+
+
+def close_ended_auctions():
+    """Close every ACTIVE auction past its end time. Returns how many."""
+    ended = Auction.objects.filter(
+        status=Auction.Status.ACTIVE,
+        end_time__lte=timezone.now(),
+    )
+
+    closed = 0
+    for auction in ended:
+        # One transaction per auction, so one failure does not undo the
+        # others.
+        if close_auction(auction):
+            closed += 1
+    return closed

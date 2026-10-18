@@ -222,6 +222,18 @@ CELERY_TIMEZONE = TIME_ZONE
 # During tests, run tasks immediately in the same process (no Redis needed).
 CELERY_TASK_ALWAYS_EAGER = TESTING
 
+# Periodic tasks run by "celery -A config beat". Times are in seconds.
+CELERY_BEAT_SCHEDULE = {
+    "close-ended-auctions": {
+        "task": "auctions.tasks.close_ended_auctions_task",
+        "schedule": 60.0,
+    },
+    "expire-overdue-payments": {
+        "task": "payments.tasks.expire_overdue_payments_task",
+        "schedule": 600.0,
+    },
+}
+
 
 # ---------------------------------------------------------------------------
 # Payments

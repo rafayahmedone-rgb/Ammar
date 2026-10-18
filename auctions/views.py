@@ -102,6 +102,8 @@ def auction_context(user, auction):
         bids = bids.filter(is_withdrawn=False)
 
     return {
+        # None unless the auction was SOLD.
+        "payment": getattr(auction, "payment", None),
         "highest_bid": auction.highest_bid(),
         "minimum_bid": services.minimum_bid(auction),
         "bids": bids,
@@ -217,7 +219,9 @@ def my_bids(request):
 
 @role_required(User.Role.SELLER)
 def my_lots(request):
-    lots = request.user.lots.select_related("category")
+    lots = request.user.lots.select_related(
+        "category", "auction", "auction__payment"
+    )
     return render(request, "auctions/my_lots.html", {"lots": lots})
 
 
